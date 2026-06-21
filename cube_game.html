@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لعبة متاهة الأسهم ثلاثية الأبعاد</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #0b0c10;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: #fff;
+            user-select: none;
+        }
+        #info-panel {
+            position: absolute;
+            top: 20px;
+            width: 100%;
+            text-align: center;
+            pointer-events: none;
+        }
+        h1 {
+            margin: 0 0 5px 0;
+            color: #66fcf1;
+            font-size: 24px;
+            text-shadow: 0 0 10px rgba(102, 252, 241, 0.5);
+        }
+        p {
+            margin: 0;
+            color: #c5c6c7;
+            font-size: 14px;
+        }
+        #ui-layer {
+            position: absolute;
+            bottom: 30px;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            pointer-events: none;
+        }
+        .btn {
+            background: #1f2833;
+            color: #66fcf1;
+            border: 2px solid #66fcf1;
+            padding: 10px 20px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 5px;
+            cursor: pointer;
+            pointer-events: auto;
+            box-shadow: 0 0 15px rgba(102, 252, 241, 0.2);
+            transition: all 0.3s ease;
+        }
+        .btn:hover {
+            background: #66fcf1;
+            color: #0b0c10;
+            box-shadow: 0 0 25px rgba(102, 252, 241, 0.6);
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script>
+</head>
+<body>
+
+    <div id="info-panel">
+        <h1>متاهة الأسهم ثلاثية الأبعاد</h1>
+        <p>اسحب بالماوس لتدوير المكعب بسلاسة، واضغط على السهم المضيء للتحرك</p>
+    </div>
+
+    <div id="ui-layer">
+        <button class="btn" onclick="resetGame()">إعادة البدء</button>
+    </div>
+
+<script>
+    // إعدادات المشهد الأساسية
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    document.body.appendChild(renderer.domElement);
+
+    // إضاءة المشهد لتبدو الأوجه واضحة وثلاثية الأبعاد
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+    scene.add(ambientLight);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.6);
+    dirLight.position.set(5, 5, 5);
+    scene.add(dirLight);
+
+    // إعداد التحكم بالكاميرا بالماوس (دوران سلس)
+    const controls = new THREE.OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.05;
+    controls.minDistance = 5;
+    controls.maxDistance = 15;
+    camera.position.set(4, 4, 6);
+    controls.update();
+
+    // إعداد قماش (Canvas) ثنائي الأبعاد لرسم شبكة الأسهم لكل وجه
+    function createFaceTexture(faceIndex, highlightCoord = null, targetCoord = null) {
+        const canvas = document.createElement('canvas');
+        canvas.width = 512;
+        canvas.height = 512;
+        const ctx = canvas.getContext('2d');
+
+        // خلفية الوجه
+        ctx.fillStyle = '#1f2833';
+        ctx.fillRect(0, 0, 512, 512);
+
+        // رسم الشبكة (3×3 على كل وجه لتبسيط اللعبة)
+        const size = 3;
+        const cellSize = 512 / size;
+
+        // أسهم افتراضية لكل وجه (0: أمام، 1: خلف، 2: أعلى، 3: أسفل، 4: يمين، 5: يسار)
+        const arrows = [
+            ['→', '↓', '→', '↓', '←', '↓', '→', '→', '🎯'], // وجه 0
+            ['←', '↑', '←', '↓', '→', '↑', '↑', '←', '←'], // وجه 1
+            ['↓', '→', '↓', '←', '↓', '→', '→', '↑', '→'], // وجه 2
+            ['↑', '←', '↑', '→', '↑', '←', '←', '↓', '←'], // وجه 3
+            ['→', '↓', '←', '↑', '→', '↓', '←', '↑', '→'], // وجه 4
+            ['←', '↑', '→', '↓', '←', '↑', '→', '↓', '←']  // وجه 5
+        ];
+
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = '#45a29e';
+
+        for (let r = 0; r < size; r++) {
+            for (let c = 0; c < size; c++) {
+                let x = c * cellSize;
+                let y = r * cellSize;
+
+                // تلوين الخلية الحالية المضيئة
+                if (highlightCoord && highlightCoord.r === r && highlightCoord.c === c) {
+                    ctx.fillStyle = '#66fcf1';
+                    ctx.fillRect(x + 5, y + 5, cellSize - 10, cellSize - 10);
+                    ctx.fillStyle = '#0b0c10';
+                } else {
+                    ctx.fillStyle = '#1f2833';
+                    ctx.fillRect(x + 5, y + 5, cellSize - 10, cellSize - 10);
+                    ctx.fillStyle = '#66fcf1';
+                }
+
+                // رسم خطوط الشبكة الداكنة
+                ctx.strokeRect(x, y, cellSize, cellSize);
+
+                // كتابة السهم داخل المربع
+                ctx.font = 'bold 70px Arial';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                
+                let arrowIdx = r * size + c;
+                let text = arrows[faceIndex][arrowIdx];
+                ctx.fillText(text, x + cellSize / 2, y + cellSize / 2);
+            }
+        }
+
+        const texture = new THREE.CanvasTexture(canvas);
+        return texture;
+    }
+
+    // منطق اللعبة والتحركات
+    let currentFace = 0;
+    let currentGrid = { r: 0, c: 0 }; // نقطة البداية على الوجه الأمامي
+    let cubeMaterials = [];
+    let cubeMesh;
+
+    // مصفوفة لتحديث الأوجه الستة للمكعب
+    function updateCubeTextures() {
+        const materials = [];
+        for (let i = 0; i < 6; i++) {
+            let highlight = (i === currentFace) ? currentGrid : null;
+            let texture = createFaceTexture(i, highlight);
+            materials.push(new THREE.MeshStandardMaterial({ map: texture, roughness: 0.2 }));
+        }
+        
+        if (cubeMesh) {
+            cubeMesh.material = materials;
+        }
+        return materials;
+    }
+
+    // إنشاء المكعب وإضافته للمشهد
+    const geometry = new THREE.BoxGeometry(3, 3, 3);
+    cubeMaterials = updateCubeTextures();
+    cubeMesh = new THREE.Mesh(geometry, cubeMaterials);
+    scene.add(cubeMesh);
+
+    // التعرف على النقرات (Raycasting) لتحديد أي مربع تم ضغطه على المكعب ثلاثي الأبعاد
+    const raycaster = new THREE.Raycaster();
+    const mouse = new THREE.Vector2();
+
+    window.addEventListener('click', onCubeClick);
+
+    function onCubeClick(event) {
+        // حساب موقع الماوس بالنسبة للشاشة
+        mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+        mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+        raycaster.setFromCamera(mouse, camera);
+        const intersects = raycaster.intersectObject(cubeMesh);
+
+        if (intersects.length > 0) {
+            const intersect = intersects[0];
+            const faceIndex = Math.floor(intersect.faceIndex / 2); // Three.js يقسم كل وجه لمثلثين
+
+            // إذا ضغط اللاعب على الوجه الحالي المضيء
+            if (faceIndex === currentFace) {
+                // حساب أي مربع (سطر وعمود) تم ضغطه بناءً على إحداثيات الـ UV للوجه
+                const uv = intersect.uv;
+                const c = Math.floor(uv.x * 3);
+                const r = Math.floor((1 - uv.y) * 3); // عكس محور Y ليطابق المصفوفات
+
+                if (r === currentGrid.r && c === currentGrid.c) {
+                    movePlayer();
+                }
+            }
+        }
+    }
+
+    // منطق حركة اللاعب والانتقال السلس (حلقة برمجية مبسطة للتحرك)
+    function movePlayer() {
+        // إذا وصلنا للهدف في الوجه الأول (الزاوية السفلى يميناً كمثال للهدف الحالي)
+        if (currentGrid.r === 2 && currentGrid.c === 2 && currentFace === 0) {
+            alert("🎉 رائعة! لقد وصلت إلى هدف المتاهة بنجاح!");
+            resetGame();
+            return;
+        }
+
+        // حركة شبه عشوائية منسقة للانتقال بين المربعات والأوجه كمثال تفاعلي
+        currentGrid.c++;
+        if (currentGrid.c > 2) {
+            currentGrid.c = 0;
+            currentGrid.r++;
+            if (currentGrid.r > 2) {
+                currentGrid.r = 0;
+                // انتقال سلس لوجه آخر عند الخروج من حدود الوجه الحالي!
+                currentFace = (currentFace + 1) % 6; 
+                rotateCubeSmoothly(currentFace);
+            }
+        }
+        updateCubeTextures();
+    }
+
+    // تأثير تدوير المكعب تلقائياً وبشكل سلس عند الانتقال بين الأوجه
+    function rotateCubeSmoothly(face) {
+        let targetRotation = { x: 0, y: 0, z: 0 };
+        
+        // تحديد زوايا الدوران المناسبة بناءً على الوجه الجديد الكاميرا
+        switch(face) {
+            case 0: targetRotation = { x: 0, y: 0, z: 0 }; break; // الأمامي
+            case 4: targetRotation = { x: 0, y: -Math.PI / 2, z: 0 }; break; // الأيمن
+            case 1: targetRotation = { x: 0, y: Math.PI, z: 0 }; break; // الخلفي
+            case 5: targetRotation = { x: 0, y: Math.PI / 2, z: 0 }; break; // الأيسر
+            case 2: targetRotation = { x: Math.PI / 2, y: 0, z: 0 }; break; // الأعلى
+            case 3: targetRotation = { x: -Math.PI / 2, y: 0, z: 0 }; break; // الأسفل
+        }
+
+        // استخدام مكتبة TWEEN لإنشاء حركة دوران ناعمة وسلسة جداً
+        new TWEEN.Tween(cubeMesh.rotation)
+            .to(targetRotation, 1000)
+            .easing(TWEEN.Easing.Quadratic.Out)
+            .start();
+    }
+
+    function resetGame() {
+        currentFace = 0;
+        currentGrid = { r: 0, c: 0 };
+        cubeMesh.rotation.set(0, 0, 0);
+        updateCubeTextures();
+    }
+
+    // حلقة التحديث المستمر للرسوميات (Animation Loop)
+    function animate(time) {
+        requestAnimationFrame(animate);
+        TWEEN.update(time);
+        controls.update(); // لتأمين سلاسة الدوران اليدوي بالماوس
+        renderer.render(scene, camera);
+    }
+    
+    // تشغيل الأنيميشن وتجاوب الشاشة عند تغيير الحجم
+    animate();
+
+    window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+    });
+</script>
+</body>
+</html>
